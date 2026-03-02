@@ -1,0 +1,14 @@
+{
+  "model_id": "sdxl-turbo",
+  "model_name": "SDXL-Turbo",
+  "version": "1.0.0",
+  "git_url": "https://github.com/your-org/model-template-cog.git",
+  "git_ref": "main",
+  "min_replicas": 0,
+  "max_replicas": 3,
+  "gpu": true,
+  "instance_types": ["g4dn.xlarge", "g5.xlarge"],
+  "s3_weights_uri": "s3://unified-inf-weights/models/sdxl-turbo/1.0.0/",
+  "volume_size_gb": 50,
+  "hf_repo_id": "stabilityai/sdxl-turbo"
+}

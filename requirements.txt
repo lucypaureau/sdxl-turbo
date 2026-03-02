@@ -1,0 +1,7 @@
+# SDXL-Turbo (stabilityai/sdxl-turbo) — diffusers + torch.
+# Weights are loaded from /weights at runtime (synced from S3 by init container).
+boto3>=1.26.0
+torch>=2.0.0
+diffusers>=0.25.0
+transformers>=4.35.0
+accelerate>=0.25.0
