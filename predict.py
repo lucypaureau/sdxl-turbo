@@ -8,6 +8,7 @@ See: https://huggingface.co/stabilityai/sdxl-turbo
 import os
 from pathlib import Path as FilePath
 from typing import Any, List, Optional
+from types import SimpleNamespace
 
 from cog import BasePredictor, Input, Path
 
@@ -18,6 +19,10 @@ class Predictor(BasePredictor):
     def setup(self) -> None:
         """Load SDXL-Turbo pipeline from /weights (S3 sync by init container)."""
         import torch
+
+        if not hasattr(torch, "xpu"):
+            torch.xpu = SimpleNamespace(empty_cache=lambda: None)
+
         from diffusers import AutoPipelineForText2Image
 
         weights_dir = "/weights"

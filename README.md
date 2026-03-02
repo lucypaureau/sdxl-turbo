@@ -44,6 +44,35 @@ Le template est configuré pour **sdxl-turbo** avec le bucket weights réel :
 
 Les poids **ne sont pas** dans l’image Docker. CodeBuild les télécharge (HF), les envoie vers S3, puis les supprime. Au démarrage du pod, l’init container fait `aws s3 sync s3_weights_uri → /weights`, et le predictor charge depuis `/weights`.
 
+## Setup conforme à la model card HF (SDXL-Turbo)
+
+La page Hugging Face recommande le pattern Diffusers suivant pour SDXL-Turbo :
+
+- `AutoPipelineForText2Image`
+- `torch_dtype=torch.float16` + `variant="fp16"`
+- `num_inference_steps=1` (jusqu’à 4)
+- `guidance_scale=0.0`
+- taille d’image par défaut **512x512**
+
+Ce repo applique déjà ce pattern dans `predict.py`.
+
+### Versions Python recommandées
+
+Pour limiter les incompatibilités runtime entre `diffusers` et `torch` (ex: erreur `module 'torch' has no attribute 'xpu'`), conserver des versions bornées dans `requirements.txt` et **rebuild l’image** après changement.
+
+### Procédure rapide (prod)
+
+1. Mettre à jour/pousser ce repo (`config.json`, `requirements.txt`, `predict.py`).
+2. Relancer `make add-model MODEL=sdxl-turbo GIT_URL=<repo>` pour déclencher un nouveau CodeBuild.
+3. Vérifier dans les logs pod que `setup()` termine sans exception.
+4. Envoyer une requête test avec `make sqs-send`.
+
+### Si erreur au startup sur `torch`/`diffusers`
+
+- Forcer un rebuild complet de l’image (pas de cache obsolète).
+- Vérifier que l’image déployée correspond bien au dernier commit (`image_uri` en DynamoDB / logs CodeBuild).
+- Vérifier que le pod utilise bien cette nouvelle image (pas un ancien ReplicaSet).
+
 ### Flow automatique
 
 1. **Admin / SQS create** avec `model_id=sdxl-turbo`, `git_url`, `s3_weights_uri`, `volume_size_gb`, etc.
