@@ -59,13 +59,15 @@ Les poids **ne sont pas** dans l’image Docker. CodeBuild les télécharge (HF)
 
 ### 1. Ajouter le modèle (depuis la racine du repo runtime)
 
+**Seuls le model_id et le git_url sont requis.** GPU, instance types, volume_size_gb, etc. viennent de **config.json** dans le repo : CodeBuild met à jour DynamoDB après le build. Pas besoin de spécifier GPU ou INSTANCE_TYPES à la main.
+
 ```bash
-make add-model MODEL=sdxl-turbo GIT_URL=https://github.com/your-org/model-template-cog.git
+make add-model MODEL=sdxl-turbo GIT_URL=https://github.com/lucypaureau/sdxl-turbo.git
 ```
 
-Le message SQS `create` déclenche CodeBuild. CodeBuild lit `config.json` dans le repo (dont `hf_repo_id`, `s3_weights_uri`, `volume_size_gb`), build l’image Cog, télécharge les weights HF, les envoie vers `s3://unified-inf-weights/models/sdxl-turbo/1.0.0/`, et met à jour DynamoDB. Le reconciler déploie ensuite le pod (PVC + init container + container modèle).
+CodeBuild lit **config.json** (hf_repo_id, gpu, instance_types, volume_size_gb), build l'image Cog, télécharge les weights HF, les envoie vers S3, met à jour DynamoDB (status=ready, image_uri, s3_weights_uri + champs config). Le reconciler déploie le pod (PVC + init container + container modèle).
 
-Si vous utilisez l’admin panel : déployer avec les champs **s3_weights_uri** = `s3://unified-inf-weights/models/sdxl-turbo/1.0.0/` et **volume_size_gb** = 50 (ou 100), et **model_id** = sdxl-turbo, **git_url** = votre repo.
+Les champs sont synchronisés depuis config.json par CodeBuild dans DynamoDB.
 
 ### 2. Lancer une inférence
 
