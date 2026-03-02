@@ -1,6 +1,8 @@
 # SDXL-Turbo (stabilityai/sdxl-turbo) — diffusers + torch.
 # Weights are loaded from /weights at runtime (synced from S3 by init container).
+# numpy<2 required: torch/diffusers often built for NumPy 1.x; NumPy 2.x causes "Numpy is not available".
 boto3>=1.26.0
+numpy>=1.26,<2
 torch>=2.2.0,<2.7
 diffusers>=0.30.0,<0.36
 transformers>=4.39.0,<4.52
