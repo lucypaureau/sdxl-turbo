@@ -32,13 +32,15 @@ Le template est configuré pour **sdxl-turbo** avec le bucket weights réel :
   "instance_types": ["g4dn.xlarge", "g5.xlarge"],
   "s3_weights_uri": "s3://unified-inf-weights/models/sdxl-turbo/1.0.0/",
   "volume_size_gb": 50,
-  "hf_repo_id": "stabilityai/sdxl-turbo"
+  "hf_repo_id": "stabilityai/sdxl-turbo",
+  "cooldown_period_seconds": 900
 }
 ```
 
 - **hf_repo_id** : utilisé par CodeBuild pour télécharger les weights depuis Hugging Face et les envoyer vers S3.
 - **s3_weights_uri** : dérivé par CodeBuild si besoin, ou fixé ici (convention `s3://unified-inf-weights/models/<model_id>/<version>/`).
 - **volume_size_gb** : 50 Go suffisent pour SDXL-Turbo (~6 Go de poids) ; min 100 si vous préférez une marge.
+- **cooldown_period_seconds** (optionnel) : délai en secondes avant scale-down KEDA (inactivité file SQS). Défaut 900 (15 min) si absent. Borné entre 60 et 86400.
 
 ## Weights depuis S3 (image légère)
 

@@ -2,10 +2,12 @@
 # CodeBuild runs: cog build -t <ECR_IMAGE>
 # Weights are NOT in the image. CodeBuild downloads them, uploads to S3, then deletes.
 # At runtime an init container syncs s3_weights_uri -> /weights.
+# cuda: "11.8" pins the base image to nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04 so CodeBuild's pre-pull (authenticated) is used and we avoid Docker Hub 429.
 build:
   python_version: "3.11"
   python_requirements: requirements.txt
   gpu: true
+  cuda: "11.8"
   run:
     - command: mkdir -p /weights
 predict: "predict.py:Predictor"

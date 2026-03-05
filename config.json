@@ -10,5 +10,6 @@
   "instance_types": ["g4dn.xlarge", "g5.xlarge"],
   "s3_weights_uri": "s3://unified-inf-weights/models/sdxl-turbo/1.0.0/",
   "volume_size_gb": 50,
-  "hf_repo_id": "stabilityai/sdxl-turbo"
+  "hf_repo_id": "stabilityai/sdxl-turbo",
+  "cooldown_period_seconds": 900
 }
