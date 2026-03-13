@@ -26,6 +26,8 @@ class Predictor(BasePredictor):
 
     def setup(self) -> None:
         """Load SDXL-Turbo pipeline from /weights (EFS or S3-synced)."""
+        # Set before first torch import to reduce CUDA memory fragmentation (avoids OOM/SIGSEGV)
+        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         import torch
 
         _log("setup: starting pipeline load from /weights")
@@ -45,6 +47,13 @@ class Predictor(BasePredictor):
             variant="fp16",
         )
         self.pipe.to("cuda")
+        # Reduce peak VRAM (helps avoid OOM/SIGSEGV on L4/A10G)
+        if hasattr(self.pipe, "enable_attention_slicing"):
+            self.pipe.enable_attention_slicing(1)
+            _log("setup: enable_attention_slicing(1)")
+        if hasattr(self.pipe, "enable_vae_slicing"):
+            self.pipe.enable_vae_slicing()
+            _log("setup: enable_vae_slicing()")
         _log(f"setup: pipeline loaded and on cuda in {time.perf_counter() - t0:.1f}s")
 
     def predict(
@@ -75,6 +84,9 @@ class Predictor(BasePredictor):
             _log(f"predict: denoising step {step_index + 1}/{num_inference_steps}")
             return callback_kwargs
 
+        if hasattr(torch.cuda, "empty_cache"):
+            torch.cuda.empty_cache()
+            _log("predict: empty_cache done")
         t0 = time.perf_counter()
         # SDXL-Turbo: guidance_scale=0.0, 1 step recommended
         image = self.pipe(

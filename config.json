@@ -7,7 +7,7 @@
   "min_replicas": 0,
   "max_replicas": 3,
   "gpu": true,
-  "instance_types": ["g5.xlarge"],
+  "instance_types": ["g5.xlarge", "g5.2xlarge", "g5.4xlarge", "g6e.xlarge", "g6e.2xlarge"],
   "s3_weights_uri": "s3://unified-inf-weights/models/sdxl-turbo/1.0.0/",
   "volume_size_gb": 50,
   "hf_repo_id": "stabilityai/sdxl-turbo",
