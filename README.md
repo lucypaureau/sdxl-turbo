@@ -11,7 +11,7 @@ Exemple concret : déployer **[SDXL-Turbo](https://huggingface.co/stabilityai/sd
 ## Obligations pour l’infra
 
 - **cog.yaml** avec `predict: "predict.py:Predictor"` et `gpu: true` pour SDXL-Turbo.
-- **predict.py** : `setup()` charge le pipeline depuis **`/weights`** (sync S3 par l’init container) ; `predict(prompt, request_id)` génère l’image et renvoie des URIs S3 ou des `Path`.
+- **predict.py** : `setup()` charge le pipeline depuis **`/weights`** (EFS mount ou sync S3 par l’init container) ; `predict(prompt, request_id)` génère l’image et renvoie des URIs S3 ou des `Path`.
 - **Port 5000** : health-check et `/predictions` pour EKS.
 - **Sorties S3** : si `S3_DELIVERY_BUCKET` est défini, les images sont uploadées sous `prefix/MODEL_ID/request_id/` et le predictor retourne une liste d’URIs S3.
 
@@ -42,9 +42,12 @@ Le template est configuré pour **sdxl-turbo** avec le bucket weights réel :
 - **volume_size_gb** : 50 Go suffisent pour SDXL-Turbo (~6 Go de poids) ; min 100 si vous préférez une marge.
 - **cooldown_period_seconds** (optionnel) : délai en secondes avant scale-down KEDA (inactivité file SQS). Défaut 900 (15 min) si absent. Borné entre 60 et 86400.
 
-## Weights depuis S3 (image légère)
+## Weights (image légère)
 
-Les poids **ne sont pas** dans l’image Docker. CodeBuild les télécharge (HF), les envoie vers S3, puis les supprime. Au démarrage du pod, l’init container fait `aws s3 sync s3_weights_uri → /weights`, et le predictor charge depuis `/weights`.
+Les poids **ne sont pas** dans l’image Docker. CodeBuild les télécharge (HF), les envoie vers S3, puis les supprime.
+
+- **Mode S3** (`WEIGHTS_STORAGE=s3`) : au démarrage du pod, un init container fait `aws s3 sync s3_weights_uri → /weights`. Cold start plus lent (sync à chaque démarrage).
+- **Mode EFS** (`WEIGHTS_STORAGE=efs`) : un Job Kubernetes sync S3 → EFS une fois par modèle ; les pods montent EFS en `/weights` et un init « wait-for-weights » attend la fin du sync. Cold start plus rapide (lecture directe sur EFS).
 
 ## Setup conforme à la model card HF (SDXL-Turbo)
 
@@ -79,7 +82,7 @@ Pour limiter les incompatibilités runtime entre `diffusers` et `torch` (ex: err
 
 1. **Admin / SQS create** avec `model_id=sdxl-turbo`, `git_url`, `s3_weights_uri`, `volume_size_gb`, etc.
 2. **CodeBuild** : clone → `cog build` (sans poids) → télécharge `stabilityai/sdxl-turbo` → upload S3 → met à jour DynamoDB (`s3_weights_uri`, `status=ready`, `image_uri`).
-3. **Reconciler** : déploie le pod avec init container (sync S3 → `/weights`) et le container Cog qui charge depuis `/weights`.
+3. **Reconciler** : déploie le pod. En mode S3 : init container sync S3 → `/weights` ; en mode EFS : Job sync S3 → EFS, pod monte EFS en `/weights` et init attend `.synced`. Le container Cog charge depuis `/weights`.
 
 ## Déploiement réel
 
@@ -96,7 +99,7 @@ Pour limiter les incompatibilités runtime entre `diffusers` et `torch` (ex: err
 make add-model MODEL=sdxl-turbo GIT_URL=https://github.com/lucypaureau/sdxl-turbo.git
 ```
 
-CodeBuild lit **config.json** (hf_repo_id, gpu, instance_types, volume_size_gb), build l'image Cog, télécharge les weights HF, les envoie vers S3, met à jour DynamoDB (status=ready, image_uri, s3_weights_uri + champs config). Le reconciler déploie le pod (PVC + init container + container modèle).
+CodeBuild lit **config.json** (hf_repo_id, gpu, instance_types, volume_size_gb), build l'image Cog, télécharge les weights HF, les envoie vers S3, met à jour DynamoDB (status=ready, image_uri, s3_weights_uri + champs config). Le reconciler déploie le pod : en mode S3 (PVC EBS + init sync), en mode EFS (PVC EFS + Job sync + init wait + container modèle).
 
 Les champs sont synchronisés depuis config.json par CodeBuild dans DynamoDB.
 

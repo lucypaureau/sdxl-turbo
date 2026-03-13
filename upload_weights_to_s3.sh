@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Upload model weights to S3 so EKS pods can use them (init container syncs s3_weights_uri -> /weights).
+# Upload model weights to S3. EKS pods use them via init-container sync (WEIGHTS_STORAGE=s3)
+# or via EFS (WEIGHTS_STORAGE=efs: reconciler Job syncs S3 -> EFS once, pods mount EFS).
 # Run locally or in CI before deploying the model. Requires: aws CLI, optional huggingface_hub.
 #
 # Usage:

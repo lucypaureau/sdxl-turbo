@@ -1,6 +1,6 @@
 """
 Cog Predictor for SDXL-Turbo (stabilityai/sdxl-turbo) on EKS unified-inf.
-- setup(): load pipeline from /weights (synced from S3 by init container).
+- setup(): load pipeline from /weights (EFS mount or S3-synced by init container).
 - predict(): text-to-image with num_inference_steps=1, guidance_scale=0.0; upload to S3 if configured.
 See: https://huggingface.co/stabilityai/sdxl-turbo
 """
@@ -17,7 +17,7 @@ class Predictor(BasePredictor):
     """SDXL-Turbo: real-time text-to-image in 1 step. Load from /weights at startup."""
 
     def setup(self) -> None:
-        """Load SDXL-Turbo pipeline from /weights (S3 sync by init container)."""
+        """Load SDXL-Turbo pipeline from /weights (EFS or S3-synced)."""
         import torch
 
         if not hasattr(torch, "xpu"):
