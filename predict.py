@@ -6,11 +6,19 @@ See: https://huggingface.co/stabilityai/sdxl-turbo
 """
 
 import os
+import sys
+import time
 from pathlib import Path as FilePath
 from typing import Any, List, Optional
 from types import SimpleNamespace
 
 from cog import BasePredictor, Input, Path
+
+
+def _log(msg: str) -> None:
+    """Emit log line to stdout so it appears in pod logs (Cog captures stdout)."""
+    print(f"[sdxl-turbo] {msg}", flush=True)
+    sys.stdout.flush()
 
 
 class Predictor(BasePredictor):
@@ -20,6 +28,7 @@ class Predictor(BasePredictor):
         """Load SDXL-Turbo pipeline from /weights (EFS or S3-synced)."""
         import torch
 
+        _log("setup: starting pipeline load from /weights")
         if not hasattr(torch, "xpu"):
             torch.xpu = SimpleNamespace(empty_cache=lambda: None)
 
@@ -29,12 +38,14 @@ class Predictor(BasePredictor):
         if not os.path.isdir(weights_dir):
             raise RuntimeError(f"Weights directory not found: {weights_dir}")
 
+        t0 = time.perf_counter()
         self.pipe = AutoPipelineForText2Image.from_pretrained(
             weights_dir,
             torch_dtype=torch.float16,
             variant="fp16",
         )
         self.pipe.to("cuda")
+        _log(f"setup: pipeline loaded and on cuda in {time.perf_counter() - t0:.1f}s")
 
     def predict(
         self,
@@ -56,18 +67,32 @@ class Predictor(BasePredictor):
         """Generate an image from the prompt. Returns S3 URIs when S3_DELIVERY_BUCKET is set."""
         import torch
 
+        prompt_preview = (prompt[:60] + "…") if len(prompt) > 60 else prompt
+        _log(f"predict: start prompt={prompt_preview!r} num_inference_steps={num_inference_steps}")
+
+        def step_callback(pipe, step_index: int, timestep, callback_kwargs):
+            # step_index is 0-based; log 1-based for readability
+            _log(f"predict: denoising step {step_index + 1}/{num_inference_steps}")
+            return callback_kwargs
+
+        t0 = time.perf_counter()
         # SDXL-Turbo: guidance_scale=0.0, 1 step recommended
         image = self.pipe(
             prompt=prompt,
             num_inference_steps=num_inference_steps,
             guidance_scale=0.0,
+            callback_on_step_end=step_callback,
         ).images[0]
+        elapsed = time.perf_counter() - t0
+        _log(f"predict: pipeline done in {elapsed:.1f}s")
 
         out_dir = FilePath("/tmp/outputs")
         out_dir.mkdir(parents=True, exist_ok=True)
         out_file = out_dir / "output.png"
+        _log("predict: saving image to /tmp/outputs/output.png")
         image.save(str(out_file))
         output_paths: List[tuple] = [(str(out_file), "output.png")]
+        _log("predict: image saved")
 
         # S3 delivery (EKS: reconciler injects S3_DELIVERY_BUCKET, MODEL_ID, S3_DELIVERY_PREFIX)
         bucket = os.environ.get("S3_DELIVERY_BUCKET")
@@ -78,6 +103,7 @@ class Predictor(BasePredictor):
         if bucket:
             import boto3
 
+            _log(f"predict: uploading to S3 bucket={bucket} prefix={prefix}/{model_id}/{rid}/")
             s3 = boto3.client(
                 "s3",
                 region_name=os.environ.get("AWS_REGION", "eu-central-1"),
@@ -94,8 +120,11 @@ class Predictor(BasePredictor):
                     ContentType="image/png",
                 )
                 uris.append(f"s3://{bucket}/{key}")
+            _log(f"predict: S3 upload done, returning {len(uris)} URI(s)")
             return uris
 
         if len(output_paths) == 1:
+            _log("predict: returning local Path (no S3 bucket)")
             return Path(output_paths[0][0])
+        _log("predict: returning list of Paths")
         return [Path(p) for p, _ in output_paths]

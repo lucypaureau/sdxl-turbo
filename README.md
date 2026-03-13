@@ -11,7 +11,7 @@ Exemple concret : déployer **[SDXL-Turbo](https://huggingface.co/stabilityai/sd
 ## Obligations pour l’infra
 
 - **cog.yaml** avec `predict: "predict.py:Predictor"` et `gpu: true` pour SDXL-Turbo.
-- **predict.py** : `setup()` charge le pipeline depuis **`/weights`** (EFS mount ou sync S3 par l’init container) ; `predict(prompt, request_id)` génère l’image et renvoie des URIs S3 ou des `Path`.
+- **predict.py** : `setup()` charge le pipeline depuis **`/weights`** (EFS mount ou sync S3 par l’init container) ; `predict(prompt, request_id)` génère l’image et renvoie des URIs S3 ou des `Path`. Des logs `[sdxl-turbo]` (setup, dénoising step, pipeline done, save, S3) sont émis sur stdout pour le diagnostic dans les logs du pod.
 - **Port 5000** : health-check et `/predictions` pour EKS.
 - **Sorties S3** : si `S3_DELIVERY_BUCKET` est défini, les images sont uploadées sous `prefix/MODEL_ID/request_id/` et le predictor retourne une liste d’URIs S3.
 
